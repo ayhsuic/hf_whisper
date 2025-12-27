@@ -1,33 +1,33 @@
 import logging
 import httpx
 from astrbot.api.star import Context, Star, register
-from astrbot.api.event import AstrMessageEvent
-from astrbot.api.all import * # 这里通常包含了 filter
+from astrbot.api.event import AstrMessageEvent, EventType # 导入事件类型
+from astrbot.api.all import *
 
 @register("hf_whisper", "ai", "基于 HF Router 的高性能语音识别", "1.0.0")
 class HFWhisperPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config
-        # 从配置中读取 Token
         self.token = self.config.get("hf_token", "")
-        # 你截图中的 fal-ai 路由地址
         self.api_url = "https://router.huggingface.co/fal-ai/fal-ai/whisper"
         
-    @filter.on_asr() # 根据最新文档，使用 filter.on_asr()
+    # 使用通用的事件监听装饰器，并指定监听语音识别事件
+    @on_event(EventType.ASR) 
     async def handle_asr(self, event: AstrMessageEvent):
-        # 1. 获取语音二进制数据
+        # 1. 获取音频二进制数据
         audio_data = event.get_asr_data() 
         if not audio_data or not self.token:
             return
 
+        # 按照你提供的截图要求配置 headers
         headers = {
             "Authorization": f"Bearer {self.token}",
-            "Content-Type": "audio/flac" # 对应你之前截图的代码要求
+            "Content-Type": "audio/flac" 
         }
 
         try:
-            # 2. 异步请求 Hugging Face Router
+            # 2. 异步发送请求
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     self.api_url,
@@ -42,10 +42,10 @@ class HFWhisperPlugin(Star):
                 
                 if text:
                     logging.info(f"HF Whisper 识别成功: {text}")
-                    # 3. 设置识别出的文本
+                    # 3. 将文本设置到事件中供后续逻辑（如回复）使用
                     event.set_asr_text(text) 
             else:
-                logging.error(f"HF API 异常: {response.status_code} - {response.text}")
+                logging.error(f"HF API 报错: {response.status_code} - {response.text}")
                 
         except Exception as e:
-            logging.error(f"语音识别插件请求异常: {e}")
+            logging.error(f"语音识别插件运行异常: {e}")
